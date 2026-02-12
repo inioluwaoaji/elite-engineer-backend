@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Legal Bridge</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: Arial, sans-serif;
+      background: #1a0d2e;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    
+    .phone {
+      width: 375px;
+      height: 667px;
+      background: #1a0d2e;
+      border: 3px solid #ff0080;
+      border-radius: 30px;
+      padding: 40px 30px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      text-align: center;
+    }
+    
+    .screen.active { display: flex; }
+    
+    h1 {
+      color: #00f5ff;
+      font-size: 32px;
+      margin-bottom: 20px;
+      text-transform: uppercase;
+    }
+    
+    h2 {
+      color: #00f5ff;
+      font-size: 24px;
+      margin-bottom: 30px;
+      text-transform: uppercase;
+    }
+    
+    p {
+      color: white;
+      font-size: 18px;
+      margin-bottom: 20px;
+    }
+    
+    input, textarea {
+      width: 100%;
+      padding: 15px;
+      margin: 10px 0;
+      background: transparent;
+      border: 3px solid #00f5ff;
+      border-radius: 10px;
+      color: white;
+      font-size: 16px;
+    }
+    
+    input::placeholder, textarea::placeholder {
+      color: #00f5ff;
+      opacity: 0.7;
+    }
+    
+    button {
+      background: #00f5ff;
+      color: #1a0d2e;
+      padding: 15px 50px;
+      border: none;
+      border-radius: 10px;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      margin: 10px;
+      text-transform: uppercase;
+    }
+    
+    button:hover {
+      background: #00d4e0;
+    }
+    
+    .exit-btn {
+      position: absolute;
+      top: 20px;
+      right: 30px;
+      background: #ff0000;
+      padding: 10px 20px;
+      font-size: 14px;
+    }
+    
+    .category-btn {
+      width: 200px;
+      margin: 10px;
+    }
+    
+    .loading {
+      width: 150px;
+      height: 150px;
+      border: 5px dotted #00f5ff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: spin 2s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .result-card {
+      background: #00f5ff;
+      color: #1a0d2e;
+      padding: 30px;
+      border-radius: 10px;
+      margin: 20px 0;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+    
+    .logo {
+      font-size: 80px;
+      font-weight: bold;
+      color: #00f5ff;
+      background: #00f5ff;
+      color: #1a0d2e;
+      width: 150px;
+      height: 150px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 20px 0;
+    }
+    
+    .counter {
+      position: absolute;
+      bottom: 20px;
+      color: white;
+      font-size: 14px;
+    }
+    
+    .error {
+      color: #ff0000;
+      font-size: 14px;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="phone">
+    
+    <!-- Screen 1: Welcome -->
+    <div class="screen active" id="screen1">
+      <h1>LEGAL BRIDGE</h1>
+      <p>Welcome to<br>legal bridge</p>
+      <button onclick="nextScreen(2)">START</button>
+      <div class="counter">(1 of 8)</div>
+    </div>
+    
+    <!-- Screen 2: Who Are You -->
+    <div class="screen" id="screen2">
+      <button class="exit-btn" onclick="location.reload()">EXIT</button>
+      <h2>WHO ARE YOU</h2>
+      <input type="text" id="name" placeholder="NAME">
+      <span class="error" id="nameError"></span>
+      <input type="number" id="age" placeholder="AGE">
+      <span class="error" id="ageError"></span>
+      <button onclick="validateUser()">NEXT</button>
+      <div class="counter">(2 of 8)</div>
+    </div>
+    
+    <!-- Screen 3: What's The Plan -->
+    <div class="screen" id="screen3">
+      <button class="exit-btn" onclick="location.reload()">EXIT</button>
+      <h2>WHAT'S THE PLAN</h2>
+      <button class="category-btn" onclick="selectCategory('employment')">EMPLOYMENT</button>
+      <button class="category-btn" onclick="selectCategory('housing')">HOUSING</button>
+      <button class="category-btn" onclick="selectCategory('consumer')">CONSUMER RIGHTS</button>
+      <button onclick="nextScreen(4)">NEXT</button>
+      <div class="counter">(3 of 8)</div>
+    </div>
+    
+    <!-- Screen 4: Tell Us The Issue -->
+    <div class="screen" id="screen4">
+      <button class="exit-btn" onclick="location.reload()">EXIT</button>
+      <h2>TELL US THE ISSUE</h2>
+      <textarea id="issue" rows="6" placeholder="Describe your legal issue..."></textarea>
+      <button onclick="nextScreen(5)">NEXT</button>
+      <div class="counter">(4 of 8)</div>
+    </div>
+    
+    <!-- Screen 5: Is It Right -->
+    <div class="screen" id="screen5">
+      <button class="exit-btn" onclick="location.reload()">EXIT</button>
+      <h2>IS IT RIGHT</h2>
+      <div class="result-card" id="userSummary"></div>
+      <button onclick="analyzeIssue()">YES</button>
+      <div class="counter">(5 of 8)</div>
+    </div>
+    
+    <!-- Screen 6: Loading -->
+    <div class="screen" id="screen6">
+      <h2>ANALYZING LEGAL RIGHTS</h2>
+      <div class="loading">LOADING</div>
+      <div class="counter">(6 of 8)</div>
+    </div>
+    
+    <!-- Screen 7: Legal Advise Ready -->
+    <div class="screen" id="screen7">
+      <h2>LEGAL ADVISE READY</h2>
+      <div class="result-card" id="legalAdvice"></div>
+      <button onclick="nextScreen(8)">NEXT</button>
+      <div class="counter">(7 of 8)</div>
+    </div>
+    
+    <!-- Screen 8: Finish -->
+    <div class="screen" id="screen8">
+      <h1>LEGAL BRIDGE</h1>
+      <div class="logo">L.B</div>
+      <button onclick="downloadPDF()">FINISH</button>
+      <div class="counter">(8 of 8)</div>
+    </div>
+    
+  </div>
+
+  <script>
+    let userData = {};
+    
+    function nextScreen(num) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById('screen' + num).classList.add('active');
+    }
+    
+    function validateUser() {
+      const name = document.getElementById('name').value;
+      const age = document.getElementById('age').value;
+      
+      document.getElementById('nameError').innerText = '';
+      document.getElementById('ageError').innerText = '';
+      
+      if (!name) {
+        document.getElementById('nameError').innerText = 'pls enter your name';
+        return;
+      }
+      
+      if (!age) {
+        document.getElementById('ageError').innerText = 'pls this is compulsory to use our app';
+        return;
+      }
+      
+      userData.name = name;
+      userData.age = age;
+      nextScreen(3);
+    }
+    
+    function selectCategory(cat) {
+      userData.category = cat;
+    }
+    
+    async function analyzeIssue() {
+      userData.issue = document.getElementById('issue').value;
+      
+      document.getElementById('userSummary').innerText = 
+        `Issue: ${userData.issue}`;
+      
+      nextScreen(6);
+      
+      // Call JSON Logic API
+      setTimeout(async () => {
+        const response = await fetch('http://localhost:3000/api/check-rule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rule: { "if": [{ ">": [{ "var": "age" }, 18] }, "approved", "rejected"] },
+            data: { age: parseInt(userData.age) }
+          })
+        });
+        
+        const result = await response.json();
+        
+        document.getElementById('legalAdvice').innerText = 
+          `For ${userData.issue}, you are entitled to legal support. Contact your union for more details.`;
+        
+        nextScreen(7);
+      }, 3000);
+    }
+    
+    async function downloadPDF() {
+      const response = await fetch('http://localhost:3000/api/generate-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          name: userData.name,
+          issue: userData.issue
+        })
+      });
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'legal-advice.pdf';
+      a.click();
+      
+      alert('PDF Downloaded! Refresh to start over.');
+    }
+  </script>
+</body>
+</html>
