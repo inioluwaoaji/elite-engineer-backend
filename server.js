@@ -1,146 +1,79 @@
+require('dotenv').config();
 const express = require('express');
-const bcrypt = require('bcrypt');
-const db = require('./db');
-const { validateEmail, validatePassword } = require('./validation');
-require('dotenv').config();const { encrypt, decrypt } = require('./encryption');
+const PDFDocument = require('pdfkit');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-const { executeRule } = require('./jsonlogic');
-const { createPDF } = require('./pdfGenerator');
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
 
-// Middleware to parse JSON
+// Middleware
 app.use(express.json());
 
-// Test route
+// Gemini setup
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+console.log('Gemini model ready – API key is loaded');
+
+// Approved legal anchors (your list from Ade)
+const validAnchors = [
+  "1999_Const_S36", "ICCPR_Art19", "ACHPR_Art9", "UDHR_Art19",
+  "ICESCR_Art13", "ILO_Conv98", "CRC_Art13", "CEDAW_Art10",
+  "CAT_Art14", "CRPD_Art21"
+];
+
+// Root test route
 app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/index.html');
+  res.json({ message: "Server alive! POST to /api/generate-pdf" });
 });
 
-// JSON Logic endpoint
-app.post('/api/check-rule', (req, res) => {
-  const result = executeRule(req.body.rule, req.body.data);
-  res.json({ result: result });
-});
-
-// PDF Generation endpoint
+// Main PDF generation endpoint
 app.post('/api/generate-pdf', async (req, res) => {
-  const pdfData = {
-    name: req.body.name,
-    date: new Date().toLocaleDateString()
-  };
-  
-  const pdf = await createPDF(pdfData);
-  res.contentType('application/pdf');
-  res.send(pdf);
-});
+  const { name = "User", legal_anchor } = req.body;
 
-// Signup route
-app.post('/signup', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    // Validate email
-    if (!email || !validateEmail(email)) {
-      return res.status(400).json({ error: 'Invalid email format' });
-    }
-
-    // Validate password
-    const passwordCheck = validatePassword(password);
-    if (!passwordCheck.valid) {
-      return res.status(400).json({ error: passwordCheck.message });
-    }
-
-    // Check if user already exists
-    const [existingUsers] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
-    if (existingUsers.length > 0) {
-      return res.status(409).json({ error: 'User already exists' });
-    }
-
-    // Hash password
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-    // Insert user into database
-    const [result] = await db.query(
-      'INSERT INTO users (email, password) VALUES (?, ?)',
-      [email, hashedPassword]
-    );
-
-    res.status(201).json({
-      message: 'User created successfully!',
-      userId: result.insertId,
-      email: email
-    });
-
-  } catch (error) {
-    console.error('Signup error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+  // 1. Verify legal anchor
+  if (!legal_anchor || !validAnchors.includes(legal_anchor)) {
+    return res.status(400).json({ error: "Invalid or missing legal_anchor" });
   }
-});// Create legal document
-app.post('/legal-documents', async (req, res) => {
+
   try {
-    const {
-      user_id,
-      user_legal_name,
-      target_entity_name,
-      incident_timestamp,
-      notice_period_days,
-      court_order_status
-    } = req.body;
+    // 2. Generate content with Gemini
+    const prompt = `
+      You are a legal expert. Generate a formal, structured legal document (400-800 words) for the user "${name}".
+      The document must strictly reference the legal anchor: "${legal_anchor}".
+      Use accurate, formal language. Structure:
+      - Introduction
+      - Key Provisions
+      - Implications for the user
+      - Conclusion
+      Do not add unrelated laws or make up facts.
+    `;
 
-    // Validate required fields
-    if (!user_id || !user_legal_name || !target_entity_name || !incident_timestamp || !notice_period_days) {
-      return res.status(400).json({ error: 'All fields are required' });
-    }
+    const result = await model.generateContent(prompt);
+    const aiContent = result.response.text();
 
-    // Encrypt sensitive data
-    const encryptedName = encrypt(user_legal_name);
+    // 3. Create PDF
+    const doc = new PDFDocument({ margin: 50 });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${name || 'Document'}-${legal_anchor}.pdf"`);
 
-    // Insert legal document into database
-    const [result] = await db.query(
-      `INSERT INTO legal_documents 
-       (user_id, user_legal_name, target_entity_name, incident_timestamp, notice_period_days, court_order_status) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [user_id, encryptedName, target_entity_name, incident_timestamp, notice_period_days, court_order_status || false]
-    );
+    doc.pipe(res);
 
-    res.status(201).json({
-      message: 'Legal document created successfully!',
-      documentId: result.insertId
-    });
+    // PDF content
+    doc.fontSize(24).text('Legal Document', { align: 'center' }).moveDown(1);
+    doc.fontSize(14).text(`Prepared for: ${name || 'User'}`).text(`Reference: ${legal_anchor}`).moveDown(2);
+
+    doc.fontSize(12).text(aiContent, { align: 'justify' });
+
+    doc.end();
 
   } catch (error) {
-    console.error('Create legal document error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Get all legal documents for a user
-app.get('/legal-documents/:user_id', async (req, res) => {
-  try {
-    const { user_id } = req.params;
-
-    const [documents] = await db.query(
-      'SELECT * FROM legal_documents WHERE user_id = ?',
-      [user_id]
-    );
-
-    // Decrypt sensitive data before sending
-    const decryptedDocuments = documents.map(doc => ({
-      ...doc,
-      user_legal_name: decrypt(doc.user_legal_name)
-    }));
-
-    res.json({ documents: decryptedDocuments });
-
-  } catch (error) {
-    console.error('Get legal documents error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error(error);
+    res.status(500).json({ error: "Failed to generate PDF" });
   }
 });
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });

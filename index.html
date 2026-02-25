@@ -237,7 +237,18 @@
   </div>
 
   <script>
-    let userData = {};
+  // AUTO-RESTORE: Load saved data when page opens
+let userData = JSON.parse(localStorage.getItem('legalBridgeData')) || {};
+
+// If there's saved data, fill in the fields
+window.onload = function() {
+  if (userData.name) {
+    document.getElementById('name').value = userData.name;
+  }
+  if (userData.age) {
+    document.getElementById('age').value = userData.age;
+  }
+}
     
     function nextScreen(num) {
       document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -251,7 +262,7 @@
       document.getElementById('nameError').innerText = '';
       document.getElementById('ageError').innerText = '';
       
-      if (!name) {
+  if (!name) {
         document.getElementById('nameError').innerText = 'pls enter your name';
         return;
       }
@@ -263,6 +274,7 @@
       
       userData.name = name;
       userData.age = age;
+      localStorage.setItem('legalBridgeData', JSON.stringify(userData));
       nextScreen(3);
     }
     
