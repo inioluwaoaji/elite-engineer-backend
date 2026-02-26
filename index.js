@@ -1,113 +1,138 @@
-// index.js - LegalTech Backend for Render
-// Minimal, production-ready version
+// index.js
+// Clean backend version with explicit valid anchors list
 
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config(); // only needed if you also use .env locally
 
 const app = express();
 
 // Middleware
-app.use(cors());                    // allow Thunkable / frontend calls
-app.use(express.json({ limit: '10mb' })); // support reasonable JSON payloads
+app.use(cors());
+app.use(express.json());
 
-// Health check / root route
+// ────────────────────────────────────────────────
+// Valid legal anchors – expand this list as needed
+// ────────────────────────────────────────────────
+const VALID_LEGAL_ANCHORS = [
+  // Nigeria – Constitution
+  "Nigerian Constitution Section 35",
+  "Nigerian Constitution Section 36",
+  "Nigerian Constitution Section 33",
+  "Nigerian Constitution Section 34",
+  "Nigerian Constitution Section 41",
+  "Nigerian Constitution Section 1999 Section 35",   // common full reference style
+
+  // Nigeria – Penal Code / Criminal Law
+  "Nigerian Penal Code Section 200",
+  "Nigerian Penal Code Section 221",
+  "Nigerian Penal Code Section 316",
+  "Criminal Code Act Section 319",
+
+  // Nigeria – Evidence & Procedure
+  "Evidence Act Section 84",
+  "Evidence Act Section 83",
+  "Administration of Criminal Justice Act Section 396",
+
+  // Fiji
+  "Fiji Constitution Section 14",
+  "Fiji Constitution Section 22",
+  "Crimes Decree 2009 Section 45",
+  "Crimes Decree 2009 Section 97",
+  "Crimes Decree 2009 Section 210",
+
+  // Add more anchors here when you get real requirements
+];
+
+// Health / root endpoint
 app.get('/', (req, res) => {
   res.status(200).json({
-    message: "Server is alive! Use POST /api/generate-pdf with {name, legal_anchor}"
+    status: "online",
+    message: "Legal backend is alive",
+    usage: "POST /api/generate-pdf with { name: string, legal_anchor: string }"
   });
 });
 
-// Valid legal anchors (expand this list as needed)
-const VALID_LEGAL_ANCHORS = [
-  "Nigerian Constitution Section 35",
-  "Nigerian Constitution Section 36",
-  "Nigerian Penal Code Section 200",
-  "Evidence Act Section 84",
-  "Fiji Crimes Decree 2009 Section 45",
-  "Fiji Constitution Section 14",
-  // Add more real anchors here...
-];
-
-// POST endpoint for legal analysis / PDF generation
+// Main legal endpoint
 app.post('/api/generate-pdf', async (req, res) => {
   try {
     const { name, legal_anchor } = req.body;
 
-    // Basic input validation
+    // ───── Input validation ─────
     if (!name || typeof name !== 'string' || name.trim().length < 2) {
       return res.status(400).json({
-        error: "Invalid or missing 'name'. Must be a non-empty string."
+        error: "Invalid or missing 'name'. Must be a non-empty string (min 2 characters)."
       });
     }
 
-    if (!legal_anchor || typeof legal_anchor !== 'string') {
+    if (!legal_anchor || typeof legal_anchor !== 'string' || legal_anchor.trim() === '') {
       return res.status(400).json({
-        error: "Missing or invalid 'legal_anchor'. Must be a string."
+        error: "Missing or invalid 'legal_anchor'. Must be a non-empty string."
       });
     }
 
-    // Check against allowed anchors (case-insensitive match for flexibility)
-    const normalizedAnchor = legal_anchor.trim().toLowerCase();
-    const isValidAnchor = VALID_LEGAL_ANCHORS.some(anchor =>
-      anchor.toLowerCase().includes(normalizedAnchor) ||
-      normalizedAnchor.includes(anchor.toLowerCase())
+    const cleanAnchor = legal_anchor.trim();
+
+    // Case-insensitive partial match to make it more forgiving
+    const isValid = VALID_LEGAL_ANCHORS.some(anchor =>
+      anchor.toLowerCase().includes(cleanAnchor.toLowerCase()) ||
+      cleanAnchor.toLowerCase().includes(anchor.toLowerCase())
     );
 
-    if (!isValidAnchor) {
+    if (!isValid) {
       return res.status(400).json({
-        error: "Invalid legal_anchor. Use one similar to: " +
-               VALID_LEGAL_ANCHORS.slice(0, 3).join(", ") + " ...",
-        validExamples: VALID_LEGAL_ANCHORS
+        error: "Invalid legal_anchor value.",
+        message: "Please use one of the supported anchors (partial match allowed)",
+        valid_anchors: VALID_LEGAL_ANCHORS
       });
     }
 
-    // ────────────────────────────────────────────────
-    // Gemini API call (replace with your real logic)
-    // ────────────────────────────────────────────────
+    // ───── Gemini / AI logic placeholder ─────
+    // Replace this block with real Gemini integration when ready
+
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
     if (!GEMINI_API_KEY) {
-      console.error("GEMINI_API_KEY missing in environment variables");
+      console.error("GEMINI_API_KEY is not set in environment variables");
       return res.status(500).json({
-        error: "Server configuration error - API key not set"
+        error: "Server configuration error – missing Gemini API key"
       });
     }
 
-    // Placeholder for actual Gemini call
-    // You can use @google/generative-ai or fetch directly
-    const geminiResponse = {
-      // Simulate successful response
-      analysis: `Legal analysis for ${name} based on ${legal_anchor}`,
-      recommendation: "The provision applies because...",
-      pdfUrl: "https://example.com/generated/legal-advice.pdf" // or generate real PDF
+    // Simulated response – replace with actual API call
+    const result = {
+      person: name.trim(),
+      anchor: cleanAnchor,
+      analysis: `Analysis for ${name} under ${cleanAnchor} (placeholder response)`,
+      recommendation: "The facts appear to engage the fundamental right / offence described in the cited provision.",
+      confidence: "medium",
+      pdf_download_link: "https://example.com/placeholder-legal-advice.pdf"
     };
 
-    // ────────────────────────────────────────────────
-
+    // ───── Success response ─────
     return res.status(200).json({
       success: true,
-      data: geminiResponse
+      data: result
     });
 
-  } catch (error) {
-    console.error("Error in /api/generate-pdf:", error);
+  } catch (err) {
+    console.error("Error in /api/generate-pdf:", err);
     return res.status(500).json({
       error: "Internal server error",
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: err.message
     });
   }
 });
 
-// Catch-all for undefined routes
+// 404 handler
 app.use((req, res) => {
   res.status(404).json({
-    error: `Cannot ${req.method} ${req.originalUrl}`
+    error: `Cannot ${req.method} ${req.path}`
   });
 });
 
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT} - https://mindstormerx-backend.onrender.com`);
+  console.log(`Server listening on port ${PORT}`);
+  console.log(`URL: https://mindstormerx-backend.onrender.com`);
 });
