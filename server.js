@@ -1,79 +1,112 @@
-require('dotenv').config();
+// server.js - Final simplified version (no strict validation, real Gemini)
+// Deploy-ready for Render - March 2026
+
 const express = require('express');
-const PDFDocument = require('pdfkit');
+const cors = require('cors');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
-// Parse JSON bodies
+// Middleware
+app.use(cors()); // Allow calls from Thunkable/mobile
 app.use(express.json());
 
-// Root route – quick test that server is alive
+// Root health check (what you see in browser)
 app.get('/', (req, res) => {
   res.json({
-    message: "Server is alive! Use POST /api/generate-pdf with {name, legal_anchor}"
+    status: 'online',
+    message: 'Legal backend live',
+    endpoint: 'POST /api/generate-pdf',
+    example_body: {
+      name: "Aisha Mohammed",
+      legal_anchor: "Nigerian Constitution Section 35"
+    },
+    note: 'Any reasonable legal_anchor accepted - Gemini will handle analysis'
   });
 });
 
-// Main PDF endpoint – TEMPORARY VERSION (Gemini bypassed)
-app.post('/api/generate-pdf', (req, res) => {
-  const { name = "User", legal_anchor } = req.body;
+// Example anchors (for your reference - not enforced)
+const EXAMPLE_ANCHORS = [
+  "Nigerian Constitution Section 35",     // Personal liberty
+  "Nigerian Constitution Section 36",     // Fair hearing
+  "Nigerian Penal Code Section 200",
+  "Evidence Act Section 84",
+  "Fiji Constitution Section 14",
+  "Crimes Decree 2009 Section 45"
+  // Add more later if needed
+];
 
-  // List of valid anchors (add Fiji or others here when ready)
-  const validAnchors = [
-    "1999_Const_S36",       // Nigeria example
-    "1997_Const_Art14",     // Fiji example (add real ones later)
-    "ICCPR_Art19",
-    "ACHPR_Art9",
-    "UDHR_Art19",
-    "ICESCR_Art13",
-    "ILO_Conv98",
-    "CRC_Art13",
-    "CEDAW_Art10",
-    "CAT_Art14",
-    "CRPD_Art21"
-  ];
-
-  if (!legal_anchor || !validAnchors.includes(legal_anchor)) {
-    return res.status(400).json({
-      error: "Invalid or missing legal_anchor. Use one from the valid list."
-    });
-  }
-
+// Main endpoint - no validation on anchor value
+app.post('/api/generate-pdf', async (req, res) => {
   try {
-    // Fake/test content (replace with Gemini when fixed)
-    const fakeContent = `
-This is a TEST legal document generated for ${name}.
-Legal reference: ${legal_anchor}
-(Gemini API currently bypassed due to access issue – real content coming soon)
-    `;
+    const { name, legal_anchor } = req.body;
 
-    // Create PDF
-    const doc = new PDFDocument({ margin: 50 });
+    // Minimal checks only
+    if (!name || typeof name !== 'string' || name.trim() === '') {
+      return res.status(400).json({ error: "Missing or invalid 'name'" });
+    }
+    if (!legal_anchor || typeof legal_anchor !== 'string' || legal_anchor.trim() === '') {
+      return res.status(400).json({ error: "Missing or invalid 'legal_anchor'" });
+    }
 
-    // Set PDF headers BEFORE piping
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${name}-${legal_anchor}.pdf"`
-    );
+    const cleanName = name.trim();
+    const cleanAnchor = legal_anchor.trim();
 
-    doc.pipe(res);
+    // Gemini setup
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.error("GEMINI_API_KEY not set");
+      return res.status(500).json({ error: "Server missing Gemini API key" });
+    }
 
-    // PDF content
-    doc.fontSize(24).text('Legal Document (Test Mode)', { align: 'center' }).moveDown(1);
-    doc.fontSize(14).text(`Prepared for: ${name}`).text(`Reference: ${legal_anchor}`).moveDown(2);
-    doc.fontSize(12).text(fakeContent, { align: 'justify' });
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    doc.end();
+    // Prompt for legal analysis
+    const prompt = `
+You are a legal expert in Nigerian and Fijian law.
+Analyze the following:
+
+Person/Case: ${cleanName}
+Legal provision/anchor: ${cleanAnchor}
+
+Provide:
+1. Summary of what the provision says
+2. How it typically applies
+3. Potential implications/outcomes
+4. Short recommendation
+
+Keep professional, concise (<400 words). No disclaimers needed.
+`;
+
+    const result = await model.generateContent(prompt);
+    const geminiResponse = result.response.text();
+
+    // Return
+    return res.status(200).json({
+      success: true,
+      name: cleanName,
+      legal_anchor: cleanAnchor,
+      analysis: geminiResponse,
+      generated_at: new Date().toISOString()
+    });
 
   } catch (err) {
-    console.error('PDF generation failed:', err);
-    res.status(500).json({ error: "Failed to generate PDF" });
+    console.error("Error in generate-pdf:", err.message);
+    return res.status(500).json({
+      error: "Failed to process request",
+      details: err.message.includes('API') ? "Gemini API issue" : "Server error"
+    });
   }
 });
 
+// 404 for unknown routes
+app.use((req, res) => {
+  res.status(404).json({ error: `Cannot ${req.method} ${req.path}` });
+});
+
 // Start server
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
