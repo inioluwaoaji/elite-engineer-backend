@@ -1,6 +1,6 @@
-// server.js - Clean version with real Gemini call, no strict validation
+// server.js - Updated March 2026 - uses gemini-1.5-flash-latest to fix 404 error
 
-require('dotenv').config(); // for local .env testing
+require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
@@ -11,16 +11,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Health check (what you see when you open the URL in browser)
+// Health check
 app.get('/', (req, res) => {
   res.json({
     status: 'online',
-    message: 'Backend is running',
+    message: 'Backend live',
     endpoint: 'POST /api/generate-pdf',
-    example: {
-      name: "Test User",
-      legal_anchor: "Nigerian Constitution Section 35"
-    }
+    example: { name: "Test", legal_anchor: "Nigerian Constitution Section 35" }
   });
 });
 
@@ -29,7 +26,6 @@ app.post('/api/generate-pdf', async (req, res) => {
   try {
     const { name, legal_anchor } = req.body;
 
-    // Very basic checks only
     if (!name || typeof name !== 'string' || name.trim() === '') {
       return res.status(400).json({ error: "Missing or invalid name" });
     }
@@ -40,7 +36,6 @@ app.post('/api/generate-pdf', async (req, res) => {
     const cleanName = name.trim();
     const cleanAnchor = legal_anchor.trim();
 
-    // Log key status (for debugging)
     const apiKey = process.env.GEMINI_API_KEY;
     console.log("GEMINI_API_KEY status:", apiKey ? "SET" : "MISSING");
 
@@ -49,22 +44,24 @@ app.post('/api/generate-pdf', async (req, res) => {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    // FIXED MODEL NAME - use latest alias to avoid 404
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
     const prompt = `
 You are a legal expert in Nigerian and Fijian law.
-Give a short, clear analysis for:
+Provide a concise analysis for:
 
-Person: ${cleanName}
-Legal reference: ${cleanAnchor}
+Person/Case: ${cleanName}
+Legal provision: ${cleanAnchor}
 
 Include:
-1. What the provision says (key points)
+1. Key points of the provision
 2. How it applies
 3. Possible outcomes
-4. One recommendation
+4. Short recommendation
 
-Keep it professional and under 300 words.
+Professional tone, under 300 words.
 `;
 
     console.log("Sending prompt to Gemini...");
@@ -91,12 +88,11 @@ Keep it professional and under 300 words.
   }
 });
 
-// Catch unknown routes
 app.use((req, res) => {
   res.status(404).json({ error: `Cannot ${req.method} ${req.path}` });
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server started on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
