@@ -1,5 +1,6 @@
-// server.js - Final simplified version (no strict validation, real Gemini)
-// Deploy-ready for Render - March 2026
+// server.js - Clean version with real Gemini call, no strict validation
+
+require('dotenv').config(); // for local .env testing
 
 const express = require('express');
 const cors = require('cors');
@@ -7,106 +8,95 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
 
-// Middleware
-app.use(cors()); // Allow calls from Thunkable/mobile
+app.use(cors());
 app.use(express.json());
 
-// Root health check (what you see in browser)
+// Health check (what you see when you open the URL in browser)
 app.get('/', (req, res) => {
   res.json({
     status: 'online',
-    message: 'Legal backend live',
+    message: 'Backend is running',
     endpoint: 'POST /api/generate-pdf',
-    example_body: {
-      name: "Aisha Mohammed",
+    example: {
+      name: "Test User",
       legal_anchor: "Nigerian Constitution Section 35"
-    },
-    note: 'Any reasonable legal_anchor accepted - Gemini will handle analysis'
+    }
   });
 });
 
-// Example anchors (for your reference - not enforced)
-const EXAMPLE_ANCHORS = [
-  "Nigerian Constitution Section 35",     // Personal liberty
-  "Nigerian Constitution Section 36",     // Fair hearing
-  "Nigerian Penal Code Section 200",
-  "Evidence Act Section 84",
-  "Fiji Constitution Section 14",
-  "Crimes Decree 2009 Section 45"
-  // Add more later if needed
-];
-
-// Main endpoint - no validation on anchor value
+// Main endpoint
 app.post('/api/generate-pdf', async (req, res) => {
   try {
     const { name, legal_anchor } = req.body;
 
-    // Minimal checks only
+    // Very basic checks only
     if (!name || typeof name !== 'string' || name.trim() === '') {
-      return res.status(400).json({ error: "Missing or invalid 'name'" });
+      return res.status(400).json({ error: "Missing or invalid name" });
     }
     if (!legal_anchor || typeof legal_anchor !== 'string' || legal_anchor.trim() === '') {
-      return res.status(400).json({ error: "Missing or invalid 'legal_anchor'" });
+      return res.status(400).json({ error: "Missing or invalid legal_anchor" });
     }
 
     const cleanName = name.trim();
     const cleanAnchor = legal_anchor.trim();
 
-    // Gemini setup
+    // Log key status (for debugging)
     const apiKey = process.env.GEMINI_API_KEY;
+    console.log("GEMINI_API_KEY status:", apiKey ? "SET" : "MISSING");
+
     if (!apiKey) {
-      console.error("GEMINI_API_KEY not set");
       return res.status(500).json({ error: "Server missing Gemini API key" });
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    // Prompt for legal analysis
     const prompt = `
 You are a legal expert in Nigerian and Fijian law.
-Analyze the following:
+Give a short, clear analysis for:
 
-Person/Case: ${cleanName}
-Legal provision/anchor: ${cleanAnchor}
+Person: ${cleanName}
+Legal reference: ${cleanAnchor}
 
-Provide:
-1. Summary of what the provision says
-2. How it typically applies
-3. Potential implications/outcomes
-4. Short recommendation
+Include:
+1. What the provision says (key points)
+2. How it applies
+3. Possible outcomes
+4. One recommendation
 
-Keep professional, concise (<400 words). No disclaimers needed.
+Keep it professional and under 300 words.
 `;
 
-    const result = await model.generateContent(prompt);
-    const geminiResponse = result.response.text();
+    console.log("Sending prompt to Gemini...");
 
-    // Return
+    const result = await model.generateContent(prompt);
+    const analysis = result.response.text();
+
     return res.status(200).json({
       success: true,
       name: cleanName,
       legal_anchor: cleanAnchor,
-      analysis: geminiResponse,
-      generated_at: new Date().toISOString()
+      analysis,
+      timestamp: new Date().toISOString()
     });
 
   } catch (err) {
-    console.error("Error in generate-pdf:", err.message);
+    console.error("ERROR:", err.message);
+    console.error("Full error:", err);
+
     return res.status(500).json({
-      error: "Failed to process request",
-      details: err.message.includes('API') ? "Gemini API issue" : "Server error"
+      error: "Failed to generate response",
+      details: err.message || "Unknown error"
     });
   }
 });
 
-// 404 for unknown routes
+// Catch unknown routes
 app.use((req, res) => {
   res.status(404).json({ error: `Cannot ${req.method} ${req.path}` });
 });
 
-// Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server started on port ${PORT}`);
 });
