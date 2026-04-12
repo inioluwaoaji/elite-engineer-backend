@@ -25,7 +25,7 @@ app.post('/api/generate', async (req, res) => {
     }
 
     try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.0-pro' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
         const prompt = `You are a legal advisor. A user from ${country} has reported this incident: "${incident}". 
         Provide a clear legal response based on the laws of ${country}. 
@@ -34,8 +34,7 @@ app.post('/api/generate', async (req, res) => {
         Keep the response clear and helpful for a non-lawyer.`;
 
         const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const text = response.text();
+        const text = result.response.text();
 
         res.status(200).json({
             success: true,
