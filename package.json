@@ -17,6 +17,7 @@
     "crypto-js": "^4.2.0",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "groq-sdk": "^1.1.2",
     "json-logic-js": "^2.0.5",
     "mysql2": "^3.17.1",
     "pdfkit": "^0.17.2",

@@ -1,9 +1,9 @@
 const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
-const { GoogleGenAI } = require('@google/genai');
+const Groq = require('groq-sdk');
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -25,18 +25,21 @@ app.post('/api/generate', async (req, res) => {
     }
 
     try {
-        const prompt = `You are a legal advisor. A user from ${country} has reported this incident: "${incident}". 
-        Provide a clear legal response based on the laws of ${country}. 
-        If the country is Nigeria, reference the 1999 Constitution of Nigeria and the Administration of Criminal Justice Act.
-        If the country is Fiji, reference Universal Declaration of Human Rights and Fijian legal framework.
-        Keep the response clear and helpful for a non-lawyer.`;
-
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.0-flash',
-            contents: prompt
+        const completion = await groq.chat.completions.create({
+            model: 'llama3-8b-8192',
+            messages: [
+                {
+                    role: 'user',
+                    content: `You are a legal advisor. A user from ${country} has reported this incident: "${incident}". 
+                    Provide a clear legal response based on the laws of ${country}. 
+                    If the country is Nigeria, reference the 1999 Constitution of Nigeria and the Administration of Criminal Justice Act.
+                    If the country is Fiji, reference Universal Declaration of Human Rights and Fijian legal framework.
+                    Keep the response clear and helpful for a non-lawyer.`
+                }
+            ]
         });
 
-        const text = response.text;
+        const text = completion.choices[0].message.content;
 
         res.status(200).json({
             success: true,
@@ -51,7 +54,7 @@ app.post('/api/generate', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Gemini API error:', error);
+        console.error('Groq API error:', error);
         res.status(500).json({
             error: 'Failed to generate response',
             message: error.message
