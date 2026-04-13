@@ -1,9 +1,9 @@
 const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenAI } = require('@google/genai');
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -25,16 +25,18 @@ app.post('/api/generate', async (req, res) => {
     }
 
     try {
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
-
         const prompt = `You are a legal advisor. A user from ${country} has reported this incident: "${incident}". 
         Provide a clear legal response based on the laws of ${country}. 
         If the country is Nigeria, reference the 1999 Constitution of Nigeria and the Administration of Criminal Justice Act.
         If the country is Fiji, reference Universal Declaration of Human Rights and Fijian legal framework.
         Keep the response clear and helpful for a non-lawyer.`;
 
-        const result = await model.generateContent(prompt);
-        const text = result.response.text();
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.0-flash',
+            contents: prompt
+        });
+
+        const text = response.text;
 
         res.status(200).json({
             success: true,
